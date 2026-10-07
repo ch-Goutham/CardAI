@@ -1,0 +1,623 @@
+
+import { useEffect, useState } from "react";
+import axios from "axios";
+
+import UploadCard from "./components/UploadCard";
+import ContactForm from "./components/ContactForm";
+import ExcelTable from "./components/ExcelTable";
+
+import "./App.css";
+
+const API = import.meta.env.VITE_API_URL;
+const API_BASE_URL = API.replace("/api/cards", "");
+
+function App() {
+  const [data, setData] = useState(null);
+  const [confidence, setConfidence] = useState({});
+  const [ocr, setOcr] = useState([]);
+  const [image, setImage] = useState(null);
+
+  const [contacts, setContacts] = useState([]);
+
+  const [loading, setLoading] = useState(false);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [message, setMessage] = useState("");
+  const [activeTab, setActiveTab] = useState("scanner");
+
+  // ---------------------------------------
+  // Load saved contacts
+  // ---------------------------------------
+
+  const loadContacts = async () => {
+    try {
+      setLoadingContacts(true);
+
+      const response = await axios.get(API);
+
+      if (response.data.success) {
+        setContacts(response.data.data || []);
+      }
+    } catch (error) {
+      console.error("Failed to load contacts:", error);
+
+      setMessage(
+        error.response?.data?.message ||
+        "Failed to load saved contacts"
+      );
+    } finally {
+      setLoadingContacts(false);
+    }
+  };
+
+  useEffect(() => {
+    loadContacts();
+  }, []);
+
+  // ---------------------------------------
+  // Extract card
+  // ---------------------------------------
+
+  const handleExtract = async (file) => {
+    try {
+      setLoading(true);
+      setMessage("");
+
+      const formData = new FormData();
+
+      formData.append("visitingCard", file);
+
+      const response = await axios.post(
+        `${API}/extract`,
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+          timeout: 120000,
+        }
+      );
+
+      if (!response.data.success) {
+        throw new Error(
+          response.data.message || "Extraction failed"
+        );
+      }
+
+      setData(response.data.data || {});
+      setConfidence(response.data.confidence || {});
+      setOcr(response.data.ocr || []);
+      setImage(response.data.image || null);
+
+      setActiveTab("scanner");
+
+      setMessage(
+        "Information extracted successfully. Please verify the fields."
+      );
+    } catch (error) {
+      console.error("Extraction error:", error);
+
+      setMessage(
+        error.response?.data?.message ||
+        error.message ||
+        "Extraction failed"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---------------------------------------
+  // Edit field
+  // ---------------------------------------
+
+  const handleChange = (field, value) => {
+    setData((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+  };
+
+  // ---------------------------------------
+  // Save contact
+  // ---------------------------------------
+
+  const handleSave = async () => {
+    if (!data) {
+      setMessage("Please extract a visiting card first.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setMessage("");
+
+      const response = await axios.post(
+        `${API}/save`,
+        {
+          ...data,
+          rawOCR: ocr,
+          confidence,
+          image,
+        }
+      );
+
+      if (!response.data.success) {
+        throw new Error(
+          response.data.message || "Save failed"
+        );
+      }
+
+      setMessage("Contact saved successfully.");
+
+      await loadContacts();
+
+      setActiveTab("records");
+    } catch (error) {
+      console.error("Save error:", error);
+
+      setMessage(
+        error.response?.data?.message ||
+        error.message ||
+        "Save failed"
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ---------------------------------------
+  // Download Excel
+  // ---------------------------------------
+
+  const handleDownloadExcel = async () => {
+    try {
+      setMessage("");
+
+      const response = await axios.get(
+        `${API}/excel/download`,
+        {
+          responseType: "blob",
+        }
+      );
+
+      const blob = new Blob(
+        [response.data],
+        {
+          type:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        }
+      );
+
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = "visiting-cards.xlsx";
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      link.remove();
+
+      window.URL.revokeObjectURL(url);
+
+      setMessage("Excel file downloaded successfully.");
+    } catch (error) {
+      console.error("Excel download error:", error);
+
+      setMessage(
+        error.response?.data?.message ||
+        "Failed to download Excel file."
+      );
+    }
+  };
+
+  // ---------------------------------------
+  // Clear current scan
+  // ---------------------------------------
+
+  const handleNewScan = () => {
+    setData(null);
+    setConfidence({});
+    setOcr([]);
+    setImage(null);
+    setMessage("");
+    setActiveTab("scanner");
+  };
+
+  return (
+    <div className="app-shell">
+
+      {/* ================================= */}
+      {/* TOP NAVIGATION */}
+      {/* ================================= */}
+
+      <header className="topbar">
+
+        <div className="brand">
+
+          <div className="brand-icon">
+            <span>✦</span>
+          </div>
+
+          <div>
+            <h2>CardScan</h2>
+            <span>Smart Contact Capture</span>
+          </div>
+
+        </div>
+
+        <nav className="nav-tabs">
+
+          <button
+            className={
+              activeTab === "scanner"
+                ? "nav-tab active"
+                : "nav-tab"
+            }
+            onClick={() => setActiveTab("scanner")}
+          >
+            <span>⌁</span>
+            Scanner
+          </button>
+
+          <button
+            className={
+              activeTab === "records"
+                ? "nav-tab active"
+                : "nav-tab"
+            }
+            onClick={() => setActiveTab("records")}
+          >
+            <span>▤</span>
+            Records
+            <small>{contacts.length}</small>
+          </button>
+
+        </nav>
+
+        <div className="header-status">
+
+          <span className="status-dot"></span>
+
+          <span>
+            System ready
+          </span>
+
+        </div>
+
+      </header>
+
+
+      {/* ================================= */}
+      {/* MAIN CONTENT */}
+      {/* ================================= */}
+
+      <main className="main-content">
+
+        {/* ================================= */}
+        {/* SCANNER */}
+        {/* ================================= */}
+
+        {activeTab === "scanner" && (
+          <>
+            <section className="hero">
+
+              <div>
+
+                <div className="eyebrow">
+                  AI-POWERED CONTACT CAPTURE
+                </div>
+
+                <h1>
+                  Turn business cards into
+                  <span> structured contacts.</span>
+                </h1>
+
+                <p>
+                  Upload a visiting card and let PaddleOCR
+                  automatically identify names, companies,
+                  phone numbers, emails and more.
+                </p>
+
+              </div>
+
+              <div className="hero-stat">
+
+                <strong>
+                  {contacts.length}
+                </strong>
+
+                <span>
+                  Contacts saved
+                </span>
+
+              </div>
+
+            </section>
+
+
+            {/* ================================= */}
+            {/* UPLOAD */}
+            {/* ================================= */}
+
+            {!data && (
+              <section className="upload-section">
+
+                <UploadCard
+                  onExtract={handleExtract}
+                  loading={loading}
+                />
+
+                <div className="supported-info">
+
+                  <span>✓ Automatic OCR</span>
+                  <span>✓ Smart field detection</span>
+                  <span>✓ Editable results</span>
+                  <span>✓ Excel export</span>
+
+                </div>
+
+              </section>
+            )}
+
+
+            {/* ================================= */}
+            {/* EXTRACTION WORKSPACE */}
+            {/* ================================= */}
+
+            {data && (
+              <section className="workspace">
+
+                <div className="workspace-header">
+
+                  <div>
+
+                    <div className="eyebrow">
+                      EXTRACTION COMPLETE
+                    </div>
+
+                    <h2>
+                      Review contact information
+                    </h2>
+
+                    <p>
+                      Verify the extracted information
+                      before saving it.
+                    </p>
+
+                  </div>
+
+                  <button
+                    className="secondary-button"
+                    onClick={handleNewScan}
+                  >
+                    + New Scan
+                  </button>
+
+                </div>
+
+
+                <div className="workspace-grid">
+
+                  {/* CARD PREVIEW */}
+
+                  <div className="panel preview-panel">
+
+                    <div className="panel-header">
+
+                      <div>
+                        <h3>Card Preview</h3>
+                        <span>
+                          Original uploaded image
+                        </span>
+                      </div>
+
+                      <span className="verified-badge">
+                        OCR
+                      </span>
+
+                    </div>
+
+                    <div className="card-preview">
+
+                      {image ? (
+                        <img
+                          src={`${API_BASE_URL}${image.url}`}
+                          alt="Visiting card"
+                        />
+                      ) : (
+                        <div className="no-image">
+                          No preview available
+                        </div>
+                      )}
+
+                    </div>
+
+                  </div>
+
+
+                  {/* CONTACT FORM */}
+
+                  <div className="panel form-panel">
+
+                    <div className="panel-header">
+
+                      <div>
+                        <h3>Contact Information</h3>
+                        <span>
+                          Review and correct extracted data
+                        </span>
+                      </div>
+
+                      <div className="confidence-summary">
+                        <span className="confidence-dot"></span>
+                        AI extracted
+                      </div>
+
+                    </div>
+
+                    <ContactForm
+                      data={data}
+                      confidence={confidence}
+                      onChange={handleChange}
+                      onSave={handleSave}
+                      saving={saving}
+                    />
+
+                  </div>
+
+                </div>
+
+
+                {/* RAW OCR */}
+
+                {ocr.length > 0 && (
+                  <details className="ocr-panel">
+
+                    <summary>
+                      <span>
+                        Raw OCR data
+                      </span>
+
+                      <small>
+                        {ocr.length} detected items
+                      </small>
+                    </summary>
+
+                    <pre>
+                      {JSON.stringify(
+                        ocr,
+                        null,
+                        2
+                      )}
+                    </pre>
+
+                  </details>
+                )}
+
+              </section>
+            )}
+          </>
+        )}
+
+
+        {/* ================================= */}
+        {/* RECORDS */}
+        {/* ================================= */}
+
+        {activeTab === "records" && (
+          <section className="records-page">
+
+            <div className="records-header">
+
+              <div>
+
+                <div className="eyebrow">
+                  CONTACT DATABASE
+                </div>
+
+                <h1>
+                  Saved contacts
+                </h1>
+
+                <p>
+                  Manage all contacts extracted from
+                  your visiting cards.
+                </p>
+
+              </div>
+
+              <div className="records-actions">
+
+                <button
+                  className="secondary-button"
+                  onClick={() => {
+                    setActiveTab("scanner");
+                    handleNewScan();
+                  }}
+                >
+                  + Scan Card
+                </button>
+
+                <button
+                  className="primary-button"
+                  onClick={handleDownloadExcel}
+                  disabled={contacts.length === 0}
+                >
+                  ↓ Download Excel
+                </button>
+
+              </div>
+
+            </div>
+
+
+            <div className="stats-grid">
+
+              <div className="stat-card">
+                <span>Total Contacts</span>
+                <strong>{contacts.length}</strong>
+                <small>Saved in database</small>
+              </div>
+
+              <div className="stat-card">
+                <span>OCR Engine</span>
+                <strong>PaddleOCR</strong>
+                <small>Active extraction engine</small>
+              </div>
+
+              <div className="stat-card">
+                <span>Export</span>
+                <strong>Excel</strong>
+                <small>Ready to download</small>
+              </div>
+
+            </div>
+
+
+            <ExcelTable
+              contacts={contacts}
+              loading={loadingContacts}
+              onDownload={handleDownloadExcel}
+            />
+
+          </section>
+        )}
+
+      </main>
+
+
+      {/* ================================= */}
+      {/* TOAST */}
+      {/* ================================= */}
+
+      {message && (
+        <div className="toast">
+
+          <span className="toast-icon">
+            ✓
+          </span>
+
+          <span>
+            {message}
+          </span>
+
+          <button
+            onClick={() => setMessage("")}
+          >
+            ×
+          </button>
+
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+export default App;

@@ -1,0 +1,6 @@
+Flask
+gunicorn
+paddleocr
+paddlepaddle
+opencv-python-headless
+Pillow
