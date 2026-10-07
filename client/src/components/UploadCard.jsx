@@ -8,6 +8,56 @@ const UploadCard = ({
     const [file, setFile] =
         useState(null);
 
+    const handleFileChange =
+        (event) => {
+
+            const selectedFile =
+                event.target.files?.[0];
+
+            if (!selectedFile) {
+                setFile(null);
+                return;
+            }
+
+            const allowedTypes = [
+                "image/jpeg",
+                "image/png",
+                "image/webp"
+            ];
+
+            if (
+                !allowedTypes.includes(
+                    selectedFile.type
+                )
+            ) {
+                alert(
+                    "Please select JPG, PNG or WEBP image."
+                );
+
+                event.target.value = "";
+                setFile(null);
+
+                return;
+            }
+
+            if (
+                selectedFile.size >
+                5 * 1024 * 1024
+            ) {
+                alert(
+                    "Image size must be less than 5 MB."
+                );
+
+                event.target.value = "";
+                setFile(null);
+
+                return;
+            }
+
+            setFile(selectedFile);
+        };
+
+
     const handleSubmit =
         async (event) => {
 
@@ -15,7 +65,7 @@ const UploadCard = ({
 
             if (!file) {
                 alert(
-                    "Please select a visiting card image"
+                    "Please select a visiting card image."
                 );
 
                 return;
@@ -39,18 +89,12 @@ const UploadCard = ({
                 Upload JPG, PNG or WEBP
             </p>
 
-
             <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                onChange={(event) =>
-                    setFile(
-                        event.target.files?.[0] ||
-                        null
-                    )
-                }
+                onChange={handleFileChange}
+                disabled={loading}
             />
-
 
             {file && (
                 <p className="file-name">
@@ -58,18 +102,15 @@ const UploadCard = ({
                 </p>
             )}
 
-
             <button
                 type="submit"
                 disabled={
                     loading || !file
                 }
             >
-
                 {loading
                     ? "Extracting..."
                     : "Extract Information"}
-
             </button>
 
         </form>

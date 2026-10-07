@@ -12,14 +12,12 @@ import {
     downloadExcel
 } from "../controllers/cardController.js";
 
-
 const router = express.Router();
 
 
-// ==========================================
-// Extract visiting card using PaddleOCR
-// ==========================================
-
+/*
+ * Extract visiting card
+ */
 router.post(
     "/extract",
     upload.single("visitingCard"),
@@ -27,64 +25,59 @@ router.post(
 );
 
 
-// ==========================================
-// Save extracted/corrected contact
-// ==========================================
-
+/*
+ * Save contact
+ */
 router.post(
     "/save",
     saveVisitingCard
 );
 
 
-// ==========================================
-// Get all saved contacts
-// ==========================================
-
+/*
+ * Get all contacts
+ */
 router.get(
     "/",
     getVisitingCards
 );
 
 
-// ==========================================
-// Download Excel
-// ==========================================
-
+/*
+ * Download Excel
+ *
+ * Keep this BEFORE /:id.
+ */
 router.get(
     "/excel/download",
     downloadExcel
 );
 
 
-// ==========================================
-// Get single contact
-// ==========================================
-
+/*
+ * Get single contact
+ */
 router.get(
     "/:id",
     getVisitingCard
 );
 
 
-// ==========================================
-// Update contact
-// ==========================================
-
+/*
+ * Update contact
+ */
 router.put(
     "/:id",
     updateVisitingCard
 );
 
 
-// ==========================================
-// Delete contact
-// ==========================================
-
+/*
+ * Delete contact
+ */
 router.delete(
     "/:id",
     deleteVisitingCard
 );
-
 
 export default router;

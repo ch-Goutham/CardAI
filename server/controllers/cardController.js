@@ -14,31 +14,273 @@ import {
 
 
 // =====================================================
+// NORMALIZE PADDLEOCR RESPONSE
+// =====================================================
+
+// =====================================================
+// NORMALIZE PADDLEOCR RESPONSE
+// =====================================================
+
+const normalizeOCRResult = (ocrResult) => {
+
+    const normalizedLines = [];
+
+    if (
+        !ocrResult ||
+        !ocrResult.success
+    ) {
+        return normalizedLines;
+    }
+
+    const pages = Array.isArray(
+        ocrResult.pages
+    )
+        ? ocrResult.pages
+        : [];
+
+    console.log(
+        "📄 PaddleOCR pages:",
+        pages.length
+    );
+
+    pages.forEach(
+        (page, pageIndex) => {
+
+            let pageData = page;
+
+            // -------------------------------------------------
+            // Parse JSON string if necessary
+            // -------------------------------------------------
+
+            if (
+                typeof pageData === "string"
+            ) {
+                try {
+
+                    pageData =
+                        JSON.parse(
+                            pageData
+                        );
+
+                } catch (error) {
+
+                    console.error(
+                        `❌ Failed to parse page ${pageIndex}:`,
+                        error.message
+                    );
+
+                    return;
+                }
+            }
+
+            if (
+                !pageData ||
+                typeof pageData !== "object"
+            ) {
+                return;
+            }
+
+            // -------------------------------------------------
+            // IMPORTANT:
+            // PaddleOCR 3.x response contains:
+            //
+            // page = {
+            //     res: {
+            //         rec_texts: [],
+            //         rec_scores: [],
+            //         rec_polys: [],
+            //         rec_boxes: []
+            //     }
+            // }
+            // -------------------------------------------------
+
+            if (
+                pageData.res &&
+                typeof pageData.res === "object"
+            ) {
+                pageData = pageData.res;
+            }
+
+            console.log(
+                `📄 Page ${pageIndex + 1} keys:`,
+                Object.keys(pageData)
+            );
+
+            // -------------------------------------------------
+            // OCR TEXT
+            // -------------------------------------------------
+
+            const texts =
+                Array.isArray(
+                    pageData.rec_texts
+                )
+                    ? pageData.rec_texts
+                    : [];
+
+            // -------------------------------------------------
+            // OCR CONFIDENCE
+            // -------------------------------------------------
+
+            const scores =
+                Array.isArray(
+                    pageData.rec_scores
+                )
+                    ? pageData.rec_scores
+                    : [];
+
+            // -------------------------------------------------
+            // OCR POLYGONS
+            // -------------------------------------------------
+
+            const polygons =
+                Array.isArray(
+                    pageData.rec_polys
+                )
+                    ? pageData.rec_polys
+                    : Array.isArray(
+                        pageData.dt_polys
+                    )
+                        ? pageData.dt_polys
+                        : [];
+
+            // -------------------------------------------------
+            // OCR RECTANGULAR BOXES
+            // -------------------------------------------------
+
+            const boxes =
+                Array.isArray(
+                    pageData.rec_boxes
+                )
+                    ? pageData.rec_boxes
+                    : [];
+
+            console.log(
+                `📝 Texts found on page ${pageIndex + 1}:`,
+                texts.length
+            );
+
+            // -------------------------------------------------
+            // NORMALIZE OCR RESULTS
+            // -------------------------------------------------
+
+            texts.forEach(
+                (value, index) => {
+
+                    const text =
+                        String(
+                            value ?? ""
+                        ).trim();
+
+                    if (!text) {
+                        return;
+                    }
+
+                    const score =
+                        Number(
+                            scores[index] ?? 0
+                        );
+
+                    let box = null;
+
+                    if (
+                        polygons[index]
+                    ) {
+
+                        box =
+                            polygons[index];
+
+                    } else if (
+                        boxes[index]
+                    ) {
+
+                        box =
+                            boxes[index];
+                    }
+
+                    normalizedLines.push({
+
+                        text,
+
+                        confidence:
+                            Number.isFinite(
+                                score
+                            )
+                                ? score
+                                : 0,
+
+                        box,
+
+                        page:
+                            pageIndex + 1
+
+                    });
+
+                }
+            );
+
+        }
+    );
+
+    return normalizedLines;
+};
+
+
+// =====================================================
 // EXTRACT VISITING CARD
 // =====================================================
 
-export const extractCardInformation = async (req, res) => {
+export const extractCardInformation = async (
+    req,
+    res
+) => {
+
     try {
+
+        // -------------------------------------------------
+        // Validate upload
+        // -------------------------------------------------
+
         if (!req.file) {
+
             return res.status(400).json({
+
                 success: false,
-                message: "Please upload a visiting card image"
+
+                message:
+                    "Please upload a visiting card image"
+
             });
         }
 
-        console.log("=================================");
-        console.log("📸 Uploaded:", req.file.originalname);
-        console.log("📁 File path:", req.file.path);
 
-        // ---------------------------------------------
-        // STEP 1: PaddleOCR
-        // ---------------------------------------------
+        console.log(
+            "================================="
+        );
 
-        console.log("🔍 Calling PaddleOCR...");
+        console.log(
+            "📸 Uploaded:",
+            req.file.originalname
+        );
 
-        const ocrResult = await runPaddleOCR(
+        console.log(
+            "📁 File path:",
             req.file.path
         );
+
+
+        // -------------------------------------------------
+        // STEP 1: PaddleOCR
+        // -------------------------------------------------
+
+        console.log(
+            "🔍 Calling PaddleOCR..."
+        );
+
+        const ocrResult =
+            await runPaddleOCR(
+                req.file.path
+            );
+
 
         console.log(
             "✅ PaddleOCR response received"
@@ -49,48 +291,101 @@ export const extractCardInformation = async (req, res) => {
             ocrResult?.success
         );
 
+
+        // IMPORTANT:
+        // Print complete response for debugging
         console.log(
-            "OCR lines:",
-            ocrResult?.lines?.length
+            "FULL OCR RESPONSE:",
+            JSON.stringify(
+                ocrResult,
+                null,
+                2
+            )
         );
 
-        if (!ocrResult || !ocrResult.success) {
+
+        // -------------------------------------------------
+        // Check OCR success
+        // -------------------------------------------------
+
+        if (
+            !ocrResult ||
+            !ocrResult.success
+        ) {
+
             return res.status(500).json({
+
                 success: false,
-                message: "PaddleOCR failed",
+
+                message:
+                    "PaddleOCR failed",
+
                 error:
                     ocrResult?.error ||
                     "Unknown OCR error"
+
             });
         }
+
+
+        // -------------------------------------------------
+        // STEP 2: Normalize OCR
+        // -------------------------------------------------
 
         const ocrLines =
-            ocrResult.lines || [];
+            normalizeOCRResult(
+                ocrResult
+            );
+
+
+        console.log(
+            "📝 Normalized OCR lines:",
+            ocrLines.length
+        );
+
+
+        // -------------------------------------------------
+        // No OCR text
+        // -------------------------------------------------
 
         if (!ocrLines.length) {
+
             return res.status(422).json({
+
                 success: false,
+
                 message:
                     "No readable text found on the card",
+
                 ocr: []
+
             });
         }
 
-        // ---------------------------------------------
-        // DEBUG OCR
-        // ---------------------------------------------
 
-        console.log("📝 OCR TEXT:");
+        // -------------------------------------------------
+        // DEBUG OCR TEXT
+        // -------------------------------------------------
 
-        ocrLines.forEach((line, index) => {
-            console.log(
-                `${index + 1}. ${line.text}`
-            );
-        });
+        console.log(
+            "📝 OCR TEXT:"
+        );
 
-        // ---------------------------------------------
-        // STEP 2: Contact extraction
-        // ---------------------------------------------
+
+        ocrLines.forEach(
+            (line, index) => {
+
+                console.log(
+                    `${index + 1}. ${line.text} | confidence: ${line.confidence}`
+                );
+
+            }
+        );
+
+
+        // -------------------------------------------------
+        // STEP 3: Contact extraction
+        // -------------------------------------------------
 
         console.log(
             "🧠 Running contact extraction..."
@@ -98,22 +393,29 @@ export const extractCardInformation = async (req, res) => {
 
         let extracted;
 
+
         try {
+
             extracted =
-                extractContact(ocrLines);
+                extractContact(
+                    ocrLines
+                );
+
 
             console.log(
                 "✅ Contact extraction successful"
             );
 
+
             console.log(
                 "📦 Extracted data:",
                 JSON.stringify(
-                    extracted.data,
+                    extracted?.data || {},
                     null,
                     2
                 )
             );
+
 
         } catch (extractError) {
 
@@ -121,37 +423,50 @@ export const extractCardInformation = async (req, res) => {
                 "❌ cardExtractor.js ERROR:"
             );
 
-            console.error(extractError);
+            console.error(
+                extractError
+            );
+
 
             return res.status(500).json({
+
                 success: false,
+
                 message:
                     "OCR succeeded but contact extraction failed",
+
                 error:
                     extractError.message,
+
                 stack:
                     extractError.stack
+
             });
         }
 
-        // ---------------------------------------------
-        // STEP 3: Return extracted information
-        // ---------------------------------------------
+
+        // -------------------------------------------------
+        // STEP 4: Return extracted information
+        // -------------------------------------------------
 
         return res.json({
+
             success: true,
 
-            data: extracted.data,
+            data:
+                extracted?.data || {},
 
             confidence:
-                extracted.confidence || {},
+                extracted?.confidence || {},
 
             candidates:
-                extracted.candidates || {},
+                extracted?.candidates || {},
 
-            ocr: ocrLines,
+            ocr:
+                ocrLines,
 
             image: {
+
                 filename:
                     req.file.filename,
 
@@ -160,8 +475,11 @@ export const extractCardInformation = async (req, res) => {
 
                 url:
                     `/uploads/${req.file.filename}`
+
             }
+
         });
+
 
     } catch (error) {
 
@@ -169,14 +487,21 @@ export const extractCardInformation = async (req, res) => {
             "❌ Extraction error:"
         );
 
-        console.error(error);
+        console.error(
+            error
+        );
+
 
         return res.status(500).json({
+
             success: false,
+
             message:
                 "Failed to extract visiting card",
+
             error:
                 error.message
+
         });
     }
 };
@@ -186,7 +511,11 @@ export const extractCardInformation = async (req, res) => {
 // SAVE VISITING CARD
 // =====================================================
 
-export const saveVisitingCard = async (req, res) => {
+export const saveVisitingCard = async (
+    req,
+    res
+) => {
+
     try {
 
         const {
@@ -247,6 +576,7 @@ export const saveVisitingCard = async (req, res) => {
 
                 image:
                     image || {}
+
             });
 
 
@@ -262,12 +592,14 @@ export const saveVisitingCard = async (req, res) => {
 
         });
 
+
     } catch (error) {
 
         console.error(
             "❌ Save contact error:",
             error
         );
+
 
         return res.status(500).json({
 
@@ -278,6 +610,7 @@ export const saveVisitingCard = async (req, res) => {
 
             error:
                 error.message
+
         });
     }
 };
@@ -314,12 +647,14 @@ export const getVisitingCards = async (
 
         });
 
+
     } catch (error) {
 
         console.error(
             "❌ Get contacts error:",
             error
         );
+
 
         return res.status(500).json({
 
@@ -330,6 +665,7 @@ export const getVisitingCards = async (
 
             error:
                 error.message
+
         });
     }
 };
@@ -339,283 +675,286 @@ export const getVisitingCards = async (
 // GET SINGLE VISITING CARD
 // =====================================================
 
-export const getVisitingCard =
-    async (
-        req,
-        res
-    ) => {
+export const getVisitingCard = async (
+    req,
+    res
+) => {
 
-        try {
+    try {
 
-            const card =
-                await VisitingCard.findById(
-                    req.params.id
-                );
-
-
-            if (!card) {
-
-                return res.status(404).json({
-
-                    success: false,
-
-                    message:
-                        "Visiting card not found"
-
-                });
-            }
-
-
-            return res.json({
-
-                success: true,
-
-                data:
-                    card
-
-            });
-
-        } catch (error) {
-
-            console.error(
-                "❌ Get card error:",
-                error
+        const card =
+            await VisitingCard.findById(
+                req.params.id
             );
 
-            return res.status(500).json({
+
+        if (!card) {
+
+            return res.status(404).json({
 
                 success: false,
 
                 message:
-                    "Failed to fetch card",
+                    "Visiting card not found"
 
-                error:
-                    error.message
             });
         }
-    };
+
+
+        return res.json({
+
+            success: true,
+
+            data:
+                card
+
+        });
+
+
+    } catch (error) {
+
+        console.error(
+            "❌ Get card error:",
+            error
+        );
+
+
+        return res.status(500).json({
+
+            success: false,
+
+            message:
+                "Failed to fetch card",
+
+            error:
+                error.message
+
+        });
+    }
+};
 
 
 // =====================================================
 // UPDATE VISITING CARD
 // =====================================================
 
-export const updateVisitingCard =
-    async (
-        req,
-        res
-    ) => {
+export const updateVisitingCard = async (
+    req,
+    res
+) => {
 
-        try {
+    try {
 
-            const card =
-                await VisitingCard.findByIdAndUpdate(
+        const card =
+            await VisitingCard.findByIdAndUpdate(
 
-                    req.params.id,
+                req.params.id,
 
-                    req.body,
+                req.body,
 
-                    {
-                        new: true,
-                        runValidators: true
-                    }
+                {
+                    new: true,
+                    runValidators: true
+                }
 
-                );
-
-
-            if (!card) {
-
-                return res.status(404).json({
-
-                    success: false,
-
-                    message:
-                        "Visiting card not found"
-
-                });
-            }
-
-
-            return res.json({
-
-                success: true,
-
-                message:
-                    "Visiting card updated",
-
-                data:
-                    card
-
-            });
-
-        } catch (error) {
-
-            console.error(
-                "❌ Update card error:",
-                error
             );
 
-            return res.status(500).json({
+
+        if (!card) {
+
+            return res.status(404).json({
 
                 success: false,
 
                 message:
-                    "Failed to update card",
+                    "Visiting card not found"
 
-                error:
-                    error.message
             });
         }
-    };
+
+
+        return res.json({
+
+            success: true,
+
+            message:
+                "Visiting card updated",
+
+            data:
+                card
+
+        });
+
+
+    } catch (error) {
+
+        console.error(
+            "❌ Update card error:",
+            error
+        );
+
+
+        return res.status(500).json({
+
+            success: false,
+
+            message:
+                "Failed to update card",
+
+            error:
+                error.message
+
+        });
+    }
+};
 
 
 // =====================================================
 // DELETE VISITING CARD
 // =====================================================
 
-export const deleteVisitingCard =
-    async (
-        req,
-        res
-    ) => {
+export const deleteVisitingCard = async (
+    req,
+    res
+) => {
 
-        try {
+    try {
 
-            const card =
-                await VisitingCard.findByIdAndDelete(
-                    req.params.id
-                );
-
-
-            if (!card) {
-
-                return res.status(404).json({
-
-                    success: false,
-
-                    message:
-                        "Visiting card not found"
-
-                });
-            }
-
-
-            return res.json({
-
-                success: true,
-
-                message:
-                    "Visiting card deleted"
-
-            });
-
-        } catch (error) {
-
-            console.error(
-                "❌ Delete card error:",
-                error
+        const card =
+            await VisitingCard.findByIdAndDelete(
+                req.params.id
             );
 
-            return res.status(500).json({
+
+        if (!card) {
+
+            return res.status(404).json({
 
                 success: false,
 
                 message:
-                    "Failed to delete card",
+                    "Visiting card not found"
 
-                error:
-                    error.message
             });
         }
-    };
+
+
+        return res.json({
+
+            success: true,
+
+            message:
+                "Visiting card deleted"
+
+        });
+
+
+    } catch (error) {
+
+        console.error(
+            "❌ Delete card error:",
+            error
+        );
+
+
+        return res.status(500).json({
+
+            success: false,
+
+            message:
+                "Failed to delete card",
+
+            error:
+                error.message
+
+        });
+    }
+};
 
 
 // =====================================================
 // DOWNLOAD EXCEL
 // =====================================================
 
-export const downloadExcel =
-    async (
-        req,
-        res
-    ) => {
+export const downloadExcel = async (
+    req,
+    res
+) => {
 
-        try {
+    try {
 
-            console.log(
-                "📊 Generating Excel from MongoDB..."
-            );
-
-
-            // Get latest contacts
-            const contacts =
-                await VisitingCard.find()
-                    .sort({
-                        createdAt: -1
-                    })
-                    .lean();
+        console.log(
+            "📊 Generating Excel from MongoDB..."
+        );
 
 
-            if (!contacts.length) {
-
-                return res.status(404).json({
-
-                    success: false,
-
-                    message:
-                        "No visiting cards found"
-
-                });
-            }
+        const contacts =
+            await VisitingCard.find()
+                .sort({
+                    createdAt: -1
+                })
+                .lean();
 
 
-            // Generate XLSX buffer
-            const excelBuffer =
-                createExcelBuffer(
-                    contacts
-                );
+        if (!contacts.length) {
 
-
-            // Excel content type
-            res.setHeader(
-                "Content-Type",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            );
-
-
-            // Download filename
-            res.setHeader(
-                "Content-Disposition",
-                'attachment; filename="visiting-cards.xlsx"'
-            );
-
-
-            console.log(
-                `✅ Excel generated for ${contacts.length} contacts`
-            );
-
-
-            return res.send(
-                excelBuffer
-            );
-
-        } catch (error) {
-
-            console.error(
-                "❌ Excel generation error:",
-                error
-            );
-
-            return res.status(500).json({
+            return res.status(404).json({
 
                 success: false,
 
                 message:
-                    "Failed to generate Excel file",
-
-                error:
-                    error.message
+                    "No visiting cards found"
 
             });
         }
-    };
+
+
+        const excelBuffer =
+            createExcelBuffer(
+                contacts
+            );
+
+
+        res.setHeader(
+            "Content-Type",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+
+
+        res.setHeader(
+            "Content-Disposition",
+            'attachment; filename="visiting-cards.xlsx"'
+        );
+
+
+        console.log(
+            `✅ Excel generated for ${contacts.length} contacts`
+        );
+
+
+        return res.send(
+            excelBuffer
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            "❌ Excel generation error:",
+            error
+        );
+
+
+        return res.status(500).json({
+
+            success: false,
+
+            message:
+                "Failed to generate Excel file",
+
+            error:
+                error.message
+
+        });
+    }
+};
