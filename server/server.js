@@ -2,63 +2,49 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
-import {
-    fileURLToPath
-} from "url";
+import { fileURLToPath } from "url";
 
 import connectDB from "./config/db.js";
-
-import cardRoutes
-    from "./routes/cardRoutes.js";
-
+import cardRoutes from "./routes/cardRoutes.js";
 
 dotenv.config();
 
-console.log("========== GOOGLE ENV CHECK ==========");
-console.log(
-    "GOOGLE_CLIENT_EMAIL:",
-    process.env.GOOGLE_CLIENT_EMAIL
-);
+const app = express();
 
-console.log(
-    "GOOGLE_PRIVATE_KEY exists:",
-    Boolean(process.env.GOOGLE_PRIVATE_KEY)
-);
+const PORT = process.env.PORT || 5000;
 
-console.log(
-    "GOOGLE_PRIVATE_KEY length:",
-    process.env.GOOGLE_PRIVATE_KEY?.length || 0
-);
-
-console.log(
-    "GOOGLE_SHEET_ID:",
-    process.env.GOOGLE_SHEET_ID
-);
-
-console.log("======================================");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 
-const app =
-    express();
-
-const PORT =
-    process.env.PORT || 5000;
-
-
-const __filename =
-    fileURLToPath(import.meta.url);
-
-const __dirname =
-    path.dirname(__filename);
-
+// ===============================
+// CORS
+// ===============================
 
 app.use(
     cors({
-        origin:
-            "http://localhost:5173"
+        origin: [
+            "http://localhost:5173",
+            "https://card-ai-client.vercel.app"
+        ],
+        methods: [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE",
+            "OPTIONS"
+        ],
+        allowedHeaders: [
+            "Content-Type",
+            "Authorization"
+        ]
     })
 );
 
+
+// ===============================
+// BODY PARSER
+// ===============================
 
 app.use(
     express.json({
@@ -67,16 +53,21 @@ app.use(
 );
 
 
+// ===============================
+// STATIC UPLOADS
+// ===============================
+
 app.use(
     "/uploads",
     express.static(
-        path.join(
-            __dirname,
-            "uploads"
-        )
+        path.join(__dirname, "uploads")
     )
 );
 
+
+// ===============================
+// API ROUTES
+// ===============================
 
 app.use(
     "/api/cards",
@@ -84,55 +75,73 @@ app.use(
 );
 
 
-app.get(
-    "/",
-    (req, res) => {
+// ===============================
+// HEALTH CHECK
+// ===============================
 
-        res.json({
+app.get("/", (req, res) => {
 
-            success: true,
+    res.json({
+        success: true,
+        message: "Visiting Card API is running"
+    });
 
-            message:
-                "Visiting Card API is running"
-        });
-    }
-);
+});
 
+
+// ===============================
+// ERROR HANDLER
+// ===============================
 
 app.use(
     (error, req, res, next) => {
 
-        console.error(
-            error
-        );
+        console.error(error);
 
         res.status(500).json({
-
             success: false,
-
             message:
                 error.message ||
                 "Server error"
         });
+
     }
 );
 
 
-const startServer =
-    async () => {
+// ===============================
+// START SERVER
+// ===============================
+
+const startServer = async () => {
+
+    try {
 
         await connectDB();
 
         app.listen(
             PORT,
+            "0.0.0.0",
             () => {
 
                 console.log(
-                    `🚀 Server running on http://localhost:${PORT}`
+                    `🚀 Server running on port ${PORT}`
                 );
+
             }
         );
-    };
 
+    } catch (error) {
+
+        console.error(
+            "❌ Failed to start server:",
+            error
+        );
+
+        process.exit(1);
+
+    }
+
+};
 
 startServer();
