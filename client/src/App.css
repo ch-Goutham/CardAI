@@ -195,6 +195,29 @@ button {
   justify-content: flex-end;
 }
 
+.header-user-name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sign-out-button {
+  margin-left: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: #697386;
+  background: white;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.sign-out-button:hover {
+  color: var(--text);
+  background: #f8fafc;
+}
+
 .status-dot {
   width: 7px;
   height: 7px;
@@ -838,7 +861,8 @@ button {
   }
 
   .header-status {
-    display: none;
+    display: flex;
+    min-width: 0;
   }
 
   .workspace-grid {
@@ -891,6 +915,10 @@ button {
 
   .nav-tab {
     padding: 8px 10px;
+  }
+
+  .header-status {
+    margin-left: auto;
   }
 
   .main-content {

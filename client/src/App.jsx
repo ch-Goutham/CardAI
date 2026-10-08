@@ -1,7 +1,8 @@
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 
+import LoginScreen from "./components/LoginScreen";
 import UploadCard from "./components/UploadCard";
 import ContactForm from "./components/ContactForm";
 import ExcelTable from "./components/ExcelTable";
@@ -10,8 +11,17 @@ import "./App.css";
 
 const API = import.meta.env.VITE_API_URL;
 const API_BASE_URL = API.replace("/api/cards", "");
+const USER_NAME_KEY = "card-ai-user-name";
+
+const fetchContacts = async () => {
+  const response = await axios.get(API);
+  return response.data;
+};
 
 function App() {
+  const [userName, setUserName] = useState(
+    () => window.localStorage.getItem(USER_NAME_KEY) || ""
+  );
   const [data, setData] = useState(null);
   const [confidence, setConfidence] = useState({});
   const [ocr, setOcr] = useState([]);
@@ -20,7 +30,9 @@ function App() {
   const [contacts, setContacts] = useState([]);
 
   const [loading, setLoading] = useState(false);
-  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [loadingContacts, setLoadingContacts] = useState(
+    () => Boolean(window.localStorage.getItem(USER_NAME_KEY))
+  );
   const [saving, setSaving] = useState(false);
 
   const [message, setMessage] = useState("");
@@ -30,11 +42,9 @@ function App() {
   // Load saved contacts
   // ---------------------------------------
 
-  const loadContacts = async () => {
+  const loadContacts = useCallback(async () => {
     try {
-      setLoadingContacts(true);
-
-      const response = await axios.get(API);
+      const response = await fetchContacts();
 
       if (response.data.success) {
         setContacts(response.data.data || []);
@@ -49,11 +59,56 @@ function App() {
     } finally {
       setLoadingContacts(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadContacts();
-  }, []);
+    if (!userName) return undefined;
+
+    let isCurrent = true;
+
+    fetchContacts().then(
+      (response) => {
+        if (!isCurrent) return;
+        if (response.success) {
+          setContacts(response.data || []);
+        }
+        setLoadingContacts(false);
+      },
+      (error) => {
+        if (!isCurrent) return;
+        console.error("Failed to load contacts:", error);
+        setMessage(
+          error.response?.data?.message ||
+          "Failed to load saved contacts"
+        );
+        setLoadingContacts(false);
+      }
+    );
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [userName]);
+
+  const handleLogin = (name) => {
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
+
+    setLoadingContacts(true);
+    window.localStorage.setItem(USER_NAME_KEY, trimmedName);
+    setUserName(trimmedName);
+  };
+
+  const handleSignOut = () => {
+    window.localStorage.removeItem(USER_NAME_KEY);
+    setUserName("");
+    setData(null);
+    setConfidence({});
+    setOcr([]);
+    setImage(null);
+    setMessage("");
+    setActiveTab("scanner");
+  };
 
   // ---------------------------------------
   // Extract card
@@ -151,6 +206,7 @@ function App() {
 
       setMessage("Contact saved successfully.");
 
+      setLoadingContacts(true);
       await loadContacts();
 
       setActiveTab("records");
@@ -229,6 +285,10 @@ function App() {
     setActiveTab("scanner");
   };
 
+  if (!userName) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
   return (
     <div className="app-shell">
 
@@ -284,9 +344,14 @@ function App() {
 
           <span className="status-dot"></span>
 
-          <span>
-            System ready
-          </span>
+          <span className="header-user-name">{userName}</span>
+
+          <button
+            className="sign-out-button"
+            onClick={handleSignOut}
+          >
+            Sign out
+          </button>
 
         </div>
 
