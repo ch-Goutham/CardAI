@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import axios from "axios";
+import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import LoginScreen from "./components/LoginScreen";
 import UploadCard from "./components/UploadCard";
@@ -12,13 +13,24 @@ import "./App.css";
 const API = import.meta.env.VITE_API_URL;
 const API_BASE_URL = API.replace("/api/cards", "");
 const USER_NAME_KEY = "card-ai-user-name";
+const PAGE_PATHS = {
+  login: "/login",
+  scanner: "/visiting-card",
+  jobs: "/job-posting",
+  records: "/history",
+};
+const PAGE_BY_PATH = Object.fromEntries(
+  Object.entries(PAGE_PATHS).map(([page, path]) => [path, page])
+);
 
 const fetchContacts = async () => {
   const response = await axios.get(API);
   return response.data;
 };
 
-function App() {
+function AppContent() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [userName, setUserName] = useState(
     () => window.localStorage.getItem(USER_NAME_KEY) || ""
   );
@@ -36,7 +48,8 @@ function App() {
   const [saving, setSaving] = useState(false);
 
   const [message, setMessage] = useState("");
-  const [activeTab, setActiveTab] = useState("scanner");
+  const activeTab = PAGE_BY_PATH[location.pathname] || "scanner";
+  const setActiveTab = (page) => navigate(PAGE_PATHS[page]);
 
   // ---------------------------------------
   // Load saved contacts
@@ -90,6 +103,15 @@ function App() {
     };
   }, [userName]);
 
+  useEffect(() => {
+    const routePage = PAGE_BY_PATH[location.pathname];
+    if (!userName && location.pathname !== PAGE_PATHS.login) {
+      navigate(PAGE_PATHS.login, { replace: true });
+    } else if (userName && (!routePage || routePage === "login")) {
+      navigate(PAGE_PATHS.scanner, { replace: true });
+    }
+  }, [location.pathname, navigate, userName]);
+
   const handleLogin = (name) => {
     const trimmedName = name.trim();
     if (!trimmedName) return;
@@ -97,6 +119,7 @@ function App() {
     setLoadingContacts(true);
     window.localStorage.setItem(USER_NAME_KEY, trimmedName);
     setUserName(trimmedName);
+    navigate(PAGE_PATHS.scanner, { replace: true });
   };
 
   const handleSignOut = () => {
@@ -107,7 +130,7 @@ function App() {
     setOcr([]);
     setImage(null);
     setMessage("");
-    setActiveTab("scanner");
+    navigate(PAGE_PATHS.login, { replace: true });
   };
 
   // ---------------------------------------
@@ -285,84 +308,108 @@ function App() {
     setActiveTab("scanner");
   };
 
-  if (!userName) {
+  const handleManualEntry = () => {
+    setData({
+      name: "",
+      company: "",
+      designation: "",
+      phone: "",
+      alternatePhone: "",
+      email: "",
+      website: "",
+      linkedin: "",
+      address: "",
+      notes: "",
+    });
+    setConfidence({});
+    setOcr([]);
+    setImage(null);
+    setMessage("");
+    setActiveTab("scanner");
+  };
+
+  if (location.pathname === PAGE_PATHS.login || !userName) {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
   return (
     <div className="app-shell">
+      <aside className="sidebar">
+        <a
+          className="sidebar-brand"
+          href="#scanner"
+          onClick={(event) => {
+            event.preventDefault();
+            handleNewScan();
+          }}
+        >
+          <span className="sidebar-brand-icon" aria-hidden="true">▣</span>
+          <span>Card AI</span>
+        </a>
 
-      {/* ================================= */}
-      {/* TOP NAVIGATION */}
-      {/* ================================= */}
-
-      <header className="topbar">
-
-        <div className="brand">
-
-          <div className="brand-icon">
-            <span>✦</span>
-          </div>
-
-          <div>
-            <h2>CardScan</h2>
-            <span>Smart Contact Capture</span>
-          </div>
-
+        <div className="sidebar-account">
+          <span>Logged in as <strong>{userName}</strong></span>
+          <button onClick={handleSignOut}>Logout</button>
         </div>
 
-        <nav className="nav-tabs">
-
+        <nav className="sidebar-nav" aria-label="Main navigation">
           <button
-            className={
-              activeTab === "scanner"
-                ? "nav-tab active"
-                : "nav-tab"
-            }
-            onClick={() => setActiveTab("scanner")}
+            className={activeTab === "jobs" ? "sidebar-nav-item active" : "sidebar-nav-item"}
+            onClick={() => setActiveTab("jobs")}
           >
-            <span>⌁</span>
-            Scanner
+            <span aria-hidden="true">▦</span>
+            Job Posting
           </button>
-
           <button
-            className={
-              activeTab === "records"
-                ? "nav-tab active"
-                : "nav-tab"
-            }
+            className={activeTab === "scanner" ? "sidebar-nav-item active" : "sidebar-nav-item"}
+            onClick={handleNewScan}
+          >
+            <span aria-hidden="true">▣</span>
+            Visiting Card
+          </button>
+          <button
+            className={activeTab === "records" ? "sidebar-nav-item active" : "sidebar-nav-item"}
             onClick={() => setActiveTab("records")}
           >
-            <span>▤</span>
-            Records
+            <span aria-hidden="true">◷</span>
+            History
             <small>{contacts.length}</small>
           </button>
-
         </nav>
 
-        <div className="header-status">
-
-          <span className="status-dot"></span>
-
-          <span className="header-user-name">{userName}</span>
-
-          <button
-            className="sign-out-button"
-            onClick={handleSignOut}
-          >
-            Sign out
+        <section className="sidebar-new-card">
+          <h2><span aria-hidden="true">✧</span> New</h2>
+          <p>Scan a new visiting card or enter details manually.</p>
+          <button className="sidebar-action primary" onClick={handleNewScan}>
+            <span aria-hidden="true">▣</span>
+            Visiting Card
           </button>
+          <button className="sidebar-action" onClick={handleManualEntry}>
+            <span aria-hidden="true">／</span>
+            Manual Input
+          </button>
+        </section>
+      </aside>
 
-        </div>
+      <div className="app-main">
+        <main className="main-content">
 
-      </header>
-
-
-      {/* ================================= */}
-      {/* MAIN CONTENT */}
-      {/* ================================= */}
-
-      <main className="main-content">
+        {activeTab === "jobs" && (
+          <section className="coming-soon-page">
+            <div className="eyebrow">
+              <span aria-hidden="true">✧</span> INTELLIGENT OCR SYSTEM
+            </div>
+            <div className="coming-soon-icon" aria-hidden="true">▤</div>
+            <h1>Job Posting</h1>
+            <p>
+              Extract company and role details from job postings.
+              This feature is coming soon.
+            </p>
+            <button className="upload-submit" onClick={handleNewScan}>
+              Scan a Visiting Card <span aria-hidden="true">→</span>
+            </button>
+          </section>
+        )}
 
         {/* ================================= */}
         {/* SCANNER */}
@@ -375,7 +422,7 @@ function App() {
               <div>
 
                 <div className="eyebrow">
-                  AI-POWERED CONTACT CAPTURE
+                  <span aria-hidden="true">✧</span> INTELLIGENT OCR SYSTEM
                 </div>
 
                 <h1>
@@ -384,22 +431,10 @@ function App() {
                 </h1>
 
                 <p>
-                  Upload a visiting card and let PaddleOCR
-                  automatically identify names, companies,
-                  phone numbers, emails and more.
+                  Stop manually typing details. Upload a visiting card
+                  and let AI extract names, companies, phone numbers,
+                  and contact details in seconds.
                 </p>
-
-              </div>
-
-              <div className="hero-stat">
-
-                <strong>
-                  {contacts.length}
-                </strong>
-
-                <span>
-                  Contacts saved
-                </span>
 
               </div>
 
@@ -416,16 +451,8 @@ function App() {
                 <UploadCard
                   onExtract={handleExtract}
                   loading={loading}
+                  onOpenRecords={() => setActiveTab("records")}
                 />
-
-                <div className="supported-info">
-
-                  <span>✓ Automatic OCR</span>
-                  <span>✓ Smart field detection</span>
-                  <span>✓ Editable results</span>
-                  <span>✓ Excel export</span>
-
-                </div>
 
               </section>
             )}
@@ -654,7 +681,8 @@ function App() {
           </section>
         )}
 
-      </main>
+        </main>
+      </div>
 
 
       {/* ================================= */}
@@ -682,6 +710,14 @@ function App() {
       )}
 
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path="/*" element={<AppContent />} />
+    </Routes>
   );
 }
 

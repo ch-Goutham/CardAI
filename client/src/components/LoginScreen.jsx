@@ -2,19 +2,20 @@ import { useState } from "react";
 import "./LoginScreen.css";
 
 function LoginScreen({ onLogin }) {
-  const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    const trimmedName = name.trim();
+    const trimmedUsername = username.trim();
 
-    if (!trimmedName) {
-      setError("Please enter your name to continue.");
+    if (!trimmedUsername || !password) {
+      setError("Please enter your username and password to continue.");
       return;
     }
 
-    onLogin(trimmedName);
+    onLogin(trimmedUsername);
   };
 
   return (
@@ -35,10 +36,10 @@ function LoginScreen({ onLogin }) {
           <span className="login-eyebrow">GREETINGS</span>
           <h2>Welcome Back</h2>
           <p className="login-description">
-            Enter your name to access your workspace
+            Sign in to access your workspace
           </p>
 
-          <label className="login-name-field">
+          <label className="login-field">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <rect x="4" y="3" width="16" height="18" rx="2" />
               <circle cx="12" cy="9" r="2.5" />
@@ -47,17 +48,37 @@ function LoginScreen({ onLogin }) {
             <input
               autoFocus
               type="text"
-              autoComplete="name"
-              placeholder="Full Name"
-              value={name}
+              autoComplete="username"
+              placeholder="Username"
+              value={username}
               onChange={(event) => {
-                setName(event.target.value);
+                setUsername(event.target.value);
                 if (error) setError("");
               }}
-              aria-label="Full name"
+              aria-label="Username"
               aria-invalid={Boolean(error)}
               aria-describedby={error ? "login-error" : undefined}
               maxLength={80}
+            />
+          </label>
+
+          <label className="login-field">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="4" y="10" width="16" height="11" rx="2" />
+              <path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2" />
+            </svg>
+            <input
+              type="password"
+              autoComplete="current-password"
+              placeholder="Password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                if (error) setError("");
+              }}
+              aria-label="Password"
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "login-error" : undefined}
             />
           </label>
 
@@ -68,7 +89,7 @@ function LoginScreen({ onLogin }) {
           )}
 
           <button className="login-submit" type="submit">
-            Enter Workspace
+            Sign In
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="m9 5 7 7-7 7" />
             </svg>

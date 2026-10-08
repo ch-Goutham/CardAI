@@ -3,6 +3,9 @@ node_modules/
 .env.*
 !.env.example
 
+# Python virtual environment
+ocr-service/venv/
+
 uploads/
 venv/
 __pycache__/

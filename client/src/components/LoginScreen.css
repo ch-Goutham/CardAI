@@ -14,7 +14,6 @@
 .login-card {
   width: min(100%, 468px);
   min-height: 656px;
-  transform: translateY(-64px);
   padding: 51px 43px 40px;
   display: flex;
   flex-direction: column;
@@ -94,25 +93,28 @@
   font-size: 14px;
 }
 
-.login-name-field {
+.login-field {
   height: 58px;
-  margin-top: 33px;
+  margin-top: 16px;
   padding: 0 17px;
   display: flex;
   align-items: center;
   gap: 14px;
-  border: 1px solid #7e4be5;
+  border: 1px solid #46536a;
   border-radius: 17px;
   background: #283246;
-  box-shadow: 0 0 0 3px rgba(124, 74, 220, 0.15);
 }
 
-.login-name-field:focus-within {
+.login-field:first-of-type {
+  margin-top: 33px;
+}
+
+.login-field:focus-within {
   border-color: #a47aff;
   box-shadow: 0 0 0 4px rgba(124, 74, 220, 0.23);
 }
 
-.login-name-field svg {
+.login-field svg {
   width: 19px;
   flex: 0 0 19px;
   stroke: #718096;
@@ -121,7 +123,7 @@
   stroke-linejoin: round;
 }
 
-.login-name-field input {
+.login-field input {
   width: 100%;
   min-width: 0;
   border: 0;
@@ -131,7 +133,7 @@
   font-size: 16px;
 }
 
-.login-name-field input::placeholder {
+.login-field input::placeholder {
   color: #8792a4;
   opacity: 1;
 }
@@ -206,12 +208,6 @@
   .login-footer {
     margin-top: 45px;
     padding-top: 0;
-  }
-}
-
-@media (max-height: 760px) {
-  .login-card {
-    transform: none;
   }
 }
 
