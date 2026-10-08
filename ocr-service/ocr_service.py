@@ -1,12 +1,17 @@
 from flask import Flask, request, jsonify
 from paddleocr import PaddleOCR
 
+from PIL import Image
 import os
 import uuid
 import json
+import gc
 
 
 app = Flask(__name__)
+
+# Limit upload size to 10 MB
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
 
 # =========================================================
@@ -15,10 +20,7 @@ app = Flask(__name__)
 
 TEMP_DIR = "temp_uploads"
 
-os.makedirs(
-    TEMP_DIR,
-    exist_ok=True
-)
+os.makedirs(TEMP_DIR, exist_ok=True)
 
 
 # =========================================================
@@ -71,9 +73,7 @@ def extract_ocr():
             "message": "Image file is required"
         }), 400
 
-
     file = request.files["file"]
-
 
     if not file.filename:
 
@@ -84,13 +84,12 @@ def extract_ocr():
 
 
     # -----------------------------------------------------
-    # Create temporary filename
+    # Validate extension
     # -----------------------------------------------------
 
     extension = os.path.splitext(
         file.filename
     )[1].lower()
-
 
     allowed_extensions = [
         ".jpg",
@@ -98,7 +97,6 @@ def extract_ocr():
         ".png",
         ".webp"
     ]
-
 
     if extension not in allowed_extensions:
 
@@ -109,11 +107,11 @@ def extract_ocr():
         }), 400
 
 
-    filename = (
-        f"{uuid.uuid4()}"
-        f"{extension}"
-    )
+    # -----------------------------------------------------
+    # Create temporary filename
+    # -----------------------------------------------------
 
+    filename = f"{uuid.uuid4()}.jpg"
 
     image_path = os.path.join(
         TEMP_DIR,
@@ -121,14 +119,63 @@ def extract_ocr():
     )
 
 
-    # -----------------------------------------------------
-    # Save uploaded image
-    # -----------------------------------------------------
-
-    file.save(image_path)
-
-
     try:
+
+        # -------------------------------------------------
+        # Open uploaded image
+        # -------------------------------------------------
+
+        print("Opening uploaded image...")
+
+        image = Image.open(file.stream)
+
+        print(
+            f"Original image size: {image.size}"
+        )
+
+
+        # -------------------------------------------------
+        # Convert to RGB
+        # -------------------------------------------------
+
+        if image.mode != "RGB":
+
+            image = image.convert("RGB")
+
+
+        # -------------------------------------------------
+        # Resize large images
+        # -------------------------------------------------
+
+        MAX_SIZE = 1600
+
+        image.thumbnail(
+            (MAX_SIZE, MAX_SIZE),
+            Image.Resampling.LANCZOS
+        )
+
+        print(
+            f"Processed image size: {image.size}"
+        )
+
+
+        # -------------------------------------------------
+        # Save compressed image
+        # -------------------------------------------------
+
+        image.save(
+            image_path,
+            format="JPEG",
+            quality=85,
+            optimize=True
+        )
+
+        image.close()
+
+        del image
+
+        gc.collect()
+
 
         print(
             "Starting OCR:",
@@ -156,13 +203,11 @@ def extract_ocr():
 
         pages = []
 
-
         for page in result:
 
             try:
 
                 data = page.json
-
 
                 if isinstance(
                     data,
@@ -173,11 +218,9 @@ def extract_ocr():
                         data
                     )
 
-
                 pages.append(
                     data
                 )
-
 
             except Exception as error:
 
@@ -193,7 +236,7 @@ def extract_ocr():
 
 
         # -------------------------------------------------
-        # Return OCR response
+        # Return response
         # -------------------------------------------------
 
         return jsonify({
@@ -211,7 +254,6 @@ def extract_ocr():
             "❌ PaddleOCR error:",
             repr(error)
         )
-
 
         return jsonify({
 
@@ -248,6 +290,13 @@ def extract_ocr():
                     "Failed to remove temporary file:",
                     repr(error)
                 )
+
+
+        # -------------------------------------------------
+        # Force garbage collection
+        # -------------------------------------------------
+
+        gc.collect()
 
 
 # =========================================================
