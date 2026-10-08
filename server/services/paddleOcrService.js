@@ -41,8 +41,7 @@ export const runPaddleOCR = async (
                     maxContentLength:
                         Infinity,
 
-                    timeout:
-                        120000
+                    timeout: 300000
                 }
             );
 
